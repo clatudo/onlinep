@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@plugin "tailwindcss-animate";
+
+:root {
+  --background: #fdfdfd;
+  --foreground: #09090b;
+
+  --primary: #e11d48; /* Vibrant Red */
+  --primary-foreground: #ffffff;
+
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+
+  --accent: #fb7185; /* Lighter Red Accent */
+  --accent-foreground: #4c0519;
+  
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #e11d48;
+  
+  --success: #10b981; /* WhatsApp Green logic later */
+
+  --radius: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #fafafa;
+
+    --primary: #f43f5e;
+    --primary-foreground: #ffffff;
+
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+
+    --accent: #e11d48;
+    --accent-foreground: #ffe4e6;
+    
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+
+    --border: #27272a;
+    --input: #27272a;
+    --ring: #f43f5e;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+
+  --font-sans: var(--font-geist-sans), "Inter", sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+  --font-heading: var(--font-montserrat), "Montserrat", sans-serif;
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)];
+  }
+  
+  .dark .glass {
+    @apply bg-black/20 backdrop-blur-md border border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)];
+  }
+
+  .neo-shadow {
+    @apply shadow-[0px_5px_15px_rgba(0,0,0,0.05),_0px_15px_35px_rgba(0,0,0,0.03)];
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Melhoria Global de UX: Cursores Pointer em itens clicáveis */
+button, 
+a, 
+input[type="submit"], 
+input[type="button"],
+.cursor-pointer,
+[role="button"] {
+  cursor: pointer !important;
+}
