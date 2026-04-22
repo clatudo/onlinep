@@ -31,13 +31,19 @@ export function LoginForm() {
     formData.append("identifier", data.identifier);
     formData.append("password", data.password);
 
-    const result = await signInAction(formData);
+    try {
+      const result = await signInAction(formData);
 
-    if (result?.error) {
-      setErrorMsg(result.error);
-    } else {
-      router.push("/cliente/dashboard");
-      router.refresh();
+      if (result?.error) {
+        setErrorMsg(result.error);
+      } else {
+        // Usamos window.location.href em vez de router.push para contornar
+        // o cache agressivo de rotas do Next.js (RSC cache) que pode ter guardado o estado deslogado.
+        window.location.href = "/cliente/dashboard";
+      }
+    } catch (err: any) {
+      console.error("Erro ao chamar Server Action:", err);
+      setErrorMsg(`Falha de conexão com o servidor: ${err.message}. Verifique as permissões de origem (Next.js CSRF) no next.config.ts.`);
     }
   }
 

@@ -133,27 +133,28 @@ export async function signInAction(formData: FormData) {
   const identifier = formData.get("identifier") as string; // Pode ser email ou cpf
   const password = formData.get("password") as string;
 
+  console.log(`[AUTH DEBUG] Tentativa de login iniciada. Identifier: ${identifier}, origin/host (Next.js):`, await getSiteUrl());
+
   if (!identifier || !password) {
+    console.log(`[AUTH DEBUG] E-mail/CPF ou senha ausentes.`);
     return { error: "E-mail/CPF e senha são obrigatórios." };
   }
 
   let emailToLogin = identifier;
 
-  // Verifica se o identificador se parece mais com um CPF (apenas números ou pontuação típica de CPF)
-  // Expressão simples: remover tudo que não for número e ver se tem 11 dígitos
   const cleanCPF = identifier.replace(/\D/g, "");
   if (cleanCPF.length === 11) {
-    // Busca pela conta cujo perfil tenha o CPF fornecido usando acesso ADMIN para burlar o RLS de usuários não logados.
+    console.log(`[AUTH DEBUG] Identifier detectado como CPF. Formatado: ${identifier}, Limpo: ${cleanCPF}`);
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("email")
-      .eq("cpf", identifier) // Usa o CPF com formatação se no banco guardar formatado, senão cleanCPF. Vamos testar pelo enviado
+      .eq("cpf", identifier)
       .single();
 
     if (profile?.email) {
       emailToLogin = profile.email;
+      console.log(`[AUTH DEBUG] CPF formatado encontrado. Email correspondente: ${emailToLogin}`);
     } else {
-      // Tentar com cleanCPF
       const { data: profileClean } = await supabaseAdmin
         .from("profiles")
         .select("email")
@@ -162,26 +163,31 @@ export async function signInAction(formData: FormData) {
         
       if (profileClean?.email) {
         emailToLogin = profileClean.email;
+        console.log(`[AUTH DEBUG] CPF limpo encontrado. Email correspondente: ${emailToLogin}`);
       } else {
+         console.log(`[AUTH DEBUG] Nenhum perfil encontrado para o CPF informado.`);
          return { error: "Nenhuma conta associada a este CPF encontrada." };
       }
     }
   }
 
+  console.log(`[AUTH DEBUG] Iniciando Supabase Client para signInWithPassword. Email: ${emailToLogin}`);
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: emailToLogin,
     password,
   });
 
   if (error) {
-    return { error: "Credenciais inválidas." };
+    console.error("[AUTH DEBUG] Erro retornado pelo Supabase no signInWithPassword:", error);
+    console.error("[AUTH DEBUG] HTTP Status do erro (se houver):", error.status);
+    return { error: `Erro no login: ${error.message || 'Credenciais inválidas'}` };
   }
 
-  // Redirecionamento direto no servidor para garantir que funcione mesmo sem JS (ex: ngrok)
-  const { redirect } = await import("next/navigation");
-  redirect("/cliente/dashboard");
+  console.log(`[AUTH DEBUG] Login bem-sucedido. Usuário:`, data.user?.id);
+
+  return { success: true };
 }
 
 export async function signOutAction() {

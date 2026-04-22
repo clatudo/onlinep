@@ -17,10 +17,16 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              // Removemos propriedades que podem vir como null do Supabase e quebram o Next.js
-              const cleanOptions = { ...options };
-              if (cleanOptions.secure === null) delete cleanOptions.secure;
+              const cleanOptions = { 
+                ...options,
+                secure: false, // Forçamos false para evitar que proxies http descartem
+                sameSite: 'lax' as const
+              };
+              
+              // Garante que o cookie grude no domínio atual da requisição, não importando se é ngrok, localhost, etc.
+              delete cleanOptions.domain;
 
+              console.log(`[AUTH DEBUG] Setando cookie: ${name}`, cleanOptions);
               cookieStore.set(name, value, cleanOptions);
             });
           } catch {

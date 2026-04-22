@@ -30,8 +30,7 @@ export default function AdminLogin() {
         throw new Error(data.error || "Credenciais inválidas");
       }
 
-      router.push("/admsdc");
-      router.refresh();
+      window.location.href = "/admsdc";
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
