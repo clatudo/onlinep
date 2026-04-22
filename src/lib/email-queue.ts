@@ -49,7 +49,7 @@ export async function processEmailQueue() {
 
     for (const item of pending) {
       console.log(`[EMAIL WORKER] Tentando reenvio para ${item.email} (Tentativa ${item.attempts + 1})...`);
-      
+
       const result = await sendWelcomeEmail(item.email, item.name, item.link);
 
       if (result.success) {
@@ -61,10 +61,10 @@ export async function processEmailQueue() {
       } else {
         await supabaseAdmin
           .from('email_queue')
-          .update({ 
-            attempts: item.attempts + 1, 
-            last_error: result.error?.message || 'Unknown Error',
-            updated_at: new Date().toISOString() 
+          .update({
+            attempts: item.attempts + 1,
+            last_error: (result.error as any)?.message || 'Unknown Error',
+            updated_at: new Date().toISOString()
           })
           .eq('id', item.id);
       }
