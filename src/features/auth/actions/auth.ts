@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendWelcomeEmail } from "@/lib/mail";
+import { headers } from "next/headers";
+
+async function getSiteUrl() {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  return process.env.NEXT_PUBLIC_SITE_URL || `${protocol}://${host}`;
+}
 
 export async function signUpAction(formData: FormData) {
   const email = formData.get("email") as string;
@@ -87,11 +95,12 @@ export async function signUpAction(formData: FormData) {
 
   // 4. ENVIO DE EMAIL (Via nossa Fila e SMTP Próprio)
   try {
+    const siteUrl = await getSiteUrl();
     const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
       type: 'signup',
       email: email,
       password: password,
-      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/verify-callback` }
+      options: { redirectTo: `${siteUrl}/auth/verify-callback` }
     });
 
     if (linkData?.properties?.action_link) {

@@ -29,10 +29,13 @@ export async function POST(req: NextRequest) {
 
     const token = await createAdminToken(username);
 
+    const isHttps = req.headers.get('x-forwarded-proto') === 'https' || req.nextUrl.protocol === 'https:';
+
     const response = NextResponse.json({ success: true });
     response.cookies.set({
       ...ADMIN_COOKIE_OPTIONS,
       value: token,
+      secure: process.env.NODE_ENV === 'production' && isHttps,
     });
 
     return response;

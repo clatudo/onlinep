@@ -1,8 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
 export async function createClient() {
   const cookieStore = await cookies()
+  const headersList = await headers()
+  const isHttps = headersList.get('x-forwarded-proto') === 'https' || (headersList.get('host') && !headersList.get('host')?.includes('localhost'))
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yqhdxzihagyxaqiihdzt.supabase.co',
@@ -14,9 +16,13 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
+            cookiesToSet.forEach(({ name, value, options }) => {
+              // Removemos propriedades que podem vir como null do Supabase e quebram o Next.js
+              const cleanOptions = { ...options };
+              if (cleanOptions.secure === null) delete cleanOptions.secure;
+
+              cookieStore.set(name, value, cleanOptions);
+            });
           } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing

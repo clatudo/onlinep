@@ -48,8 +48,6 @@ export async function getAdminSession(): Promise<AdminTokenPayload | null> {
 export const ADMIN_COOKIE_OPTIONS = {
   name: COOKIE_NAME,
   httpOnly: true,
-  // IMPORTANTE: Em desenvolvimento, deve ser false para funcionar em localhost sem HTTPS
-  secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   path: '/',
   maxAge: 60 * 60 * 8, // 8h

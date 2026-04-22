@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendRecoveryEmail } from "@/lib/mail";
+import { headers } from "next/headers";
+
+async function getSiteUrl() {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  return process.env.NEXT_PUBLIC_SITE_URL || `${protocol}://${host}`;
+}
 
 export async function requestPasswordResetAction(formData: FormData) {
   const identifier = formData.get("identifier") as string;
@@ -32,11 +40,12 @@ export async function requestPasswordResetAction(formData: FormData) {
   const supabase = await createClient();
 
   try {
+    const siteUrl = await getSiteUrl();
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: emailToReset,
       options: { 
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/verify-callback?next=/auth/reset-password`
+        redirectTo: `${siteUrl}/auth/verify-callback?next=/auth/reset-password`
       }
     });
 
@@ -44,7 +53,7 @@ export async function requestPasswordResetAction(formData: FormData) {
        // Se o Supabase falhar no link, tentamos o método padrão (que pode falhar no email, mas é o fallback)
        console.error("[AUTH] Erro ao gerar link de recovery:", linkError.message);
        const { error } = await supabase.auth.resetPasswordForEmail(emailToReset, {
-         redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/verify-callback?next=/auth/reset-password`,
+         redirectTo: `${siteUrl}/auth/verify-callback?next=/auth/reset-password`,
        });
        if (error) return { error: "Erro ao processar solicitação: " + error.message };
     } else if (linkData?.properties?.action_link) {

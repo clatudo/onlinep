@@ -1,10 +1,22 @@
 import nodemailer from 'nodemailer';
+import { headers } from "next/headers";
 
 /**
  * Utilitário de E-mail usando Sistema Próprio (SMTP).
  * Para funcionar, adicione as credenciais no seu arquivo .env:
  * SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
  */
+
+async function getSiteUrl() {
+  try {
+    const headersList = await headers();
+    const host = headersList.get("host") || "localhost:3000";
+    const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    return process.env.NEXT_PUBLIC_SITE_URL || `${protocol}://${host}`;
+  } catch {
+    return process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  }
+}
 
 const getTransporter = () => {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
@@ -27,7 +39,7 @@ const getTransporter = () => {
 
 export async function sendPaymentSuccessEmail(to: string, name: string, amount: number, description: string) {
   const transporter = getTransporter();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const siteUrl = await getSiteUrl();
 
   const html = `
     <div style="font-family: sans-serif; color: #131A26; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
