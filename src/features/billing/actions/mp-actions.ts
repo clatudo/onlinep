@@ -28,17 +28,68 @@ const sanitizeDoc = (doc: string | undefined | null): string => {
   return String(doc).replace(/\D/g, '');
 };
 
-// Monta o objeto identification sem enviar número vazio ao MP
-const buildIdentification = (formData: any, userMeta: any) => {
-  // O Brick já preenche type e number no formData.payer.identification
+// Valida CPF pelo algoritmo de módulo 11
+const isValidCPF = (cpf: string): boolean => {
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (10 - i);
+  let rem = (sum * 10) % 11;
+  if (rem === 10 || rem === 11) rem = 0;
+  if (rem !== parseInt(cpf[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (11 - i);
+  rem = (sum * 10) % 11;
+  if (rem === 10 || rem === 11) rem = 0;
+  return rem === parseInt(cpf[10]);
+};
+
+// Valida CNPJ pelo algoritmo de módulo 11
+const isValidCNPJ = (cnpj: string): boolean => {
+  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+  const calc = (c: string, len: number) => {
+    let sum = 0, pos = len - 7;
+    for (let i = len; i >= 1; i--) {
+      sum += parseInt(c[len - i]) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    return sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  };
+  return calc(cnpj, 12) === parseInt(cnpj[12]) && calc(cnpj, 13) === parseInt(cnpj[13]);
+};
+
+// Monta o objeto identification: valida antes de enviar ao MP
+const buildIdentification = (formData: any, userMeta: any): { type: string; number: string } | undefined => {
   const rawType = formData.payer?.identification?.type || (userMeta?.account_type === 'pj' ? 'CNPJ' : 'CPF');
   const rawNumber = formData.payer?.identification?.number || userMeta?.cpf || userMeta?.cnpj;
   const cleanNumber = sanitizeDoc(rawNumber);
 
-  console.log('[MP] Identification:', { type: rawType, rawNumber, cleanNumber });
+  console.log('[MP] Identification raw:', { type: rawType, rawNumber, cleanNumber, length: cleanNumber.length });
 
-  if (!cleanNumber) return undefined; // Não envia identificador vazio
-  return { type: rawType, number: cleanNumber };
+  if (!cleanNumber) {
+    console.log('[MP] Identification ausente — não enviando');
+    return undefined;
+  }
+
+  // Validar checksum para evitar o erro "Invalid user identification number"
+  const isCPF = cleanNumber.length === 11;
+  const isCNPJ = cleanNumber.length === 14;
+
+  if (isCPF && !isValidCPF(cleanNumber)) {
+    console.error('[MP] CPF inválido (falha no checksum):', cleanNumber);
+    throw new Error('CPF inválido. Por favor, verifique o CPF digitado e tente novamente.');
+  }
+  if (isCNPJ && !isValidCNPJ(cleanNumber)) {
+    console.error('[MP] CNPJ inválido (falha no checksum):', cleanNumber);
+    throw new Error('CNPJ inválido. Por favor, verifique o CNPJ digitado e tente novamente.');
+  }
+  if (!isCPF && !isCNPJ) {
+    console.error('[MP] Documento com tamanho inválido:', cleanNumber.length, 'dígitos');
+    throw new Error(`Documento inválido: ${cleanNumber.length} dígitos. CPF deve ter 11 e CNPJ 14 dígitos.`);
+  }
+
+  const finalType = isCNPJ ? 'CNPJ' : 'CPF';
+  console.log('[MP] Identification válida:', { type: finalType, number: cleanNumber });
+  return { type: finalType, number: cleanNumber };
 };
 
 export async function processPaymentAction(planId: PlanId, formData: any) {
@@ -85,6 +136,8 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
         ...(identification ? { identification } : {}),
       },
     };
+
+    console.log('[MP] paymentBody payer:', JSON.stringify(paymentBody.payer));
 
     if (formData.token) {
       // Cartão de crédito/débito
@@ -183,7 +236,14 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
     };
 
   } catch (error: any) {
-    console.error("=== ERRO CRÍTICO CHECKOUT ===", error.message, JSON.stringify(error.cause || {}));
+    // Log completo do erro do MercadoPago para diagnóstico
+    const cause = error.cause || error.causes || error.errors || {};
+    console.error("=== ERRO CRÍTICO CHECKOUT ===", {
+      message: error.message,
+      status: error.status,
+      cause: JSON.stringify(cause),
+      stack: error.stack?.split('\n').slice(0, 3).join(' | ')
+    });
     return { success: false, error: String(error.message || "Erro interno no processamento do pagamento.") };
   }
 }
