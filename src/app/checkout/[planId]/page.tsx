@@ -115,7 +115,10 @@ export default function CheckoutPage() {
 
       try {
         if (!mpInstance.current) {
-          mpInstance.current = new window.MercadoPago(process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY, {
+          // Usar a chave hardcoded como fallback caso a env var não esteja disponível em produção
+          const mpPublicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-ba6fa10c-c550-447b-b457-655b315e6645';
+          console.log('[CHECKOUT] Inicializando MP com chave:', mpPublicKey ? 'OK' : 'AUSENTE');
+          mpInstance.current = new window.MercadoPago(mpPublicKey, {
             locale: 'pt-BR'
           });
         }
@@ -191,9 +194,14 @@ export default function CheckoutPage() {
         };
 
         brickInstance.current = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
-      } catch (e) {
+      } catch (e: any) {
         console.error("[CHECKOUT] Falha Crítica:", e);
-        if (isMounted) setErrorMsg("Falha na inicialização segura.");
+        if (isMounted) {
+          setIsLoading(false);
+          // Mostra o erro real para facilitar diagnóstico
+          const errMsg = e?.message || String(e) || 'Erro desconhecido';
+          setErrorMsg(`Falha ao carregar o gateway de pagamento. (${errMsg})`);
+        }
       }
     };
 
