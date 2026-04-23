@@ -23,7 +23,7 @@ export async function updateSession(request: NextRequest) {
             request,
           })
           cookiesToSet.forEach(({ name, value, options }) => {
-            const cleanOptions = { ...options, secure: false, sameSite: 'lax' as const };
+            const cleanOptions = { ...options, secure: isHttps, sameSite: 'lax' as const };
             delete cleanOptions.domain;
             supabaseResponse.cookies.set(name, value, cleanOptions);
           })

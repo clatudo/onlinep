@@ -4,7 +4,7 @@ import { cookies, headers } from 'next/headers'
 export async function createClient() {
   const cookieStore = await cookies()
   const headersList = await headers()
-  const isHttps = headersList.get('x-forwarded-proto') === 'https' || (headersList.get('host') && !headersList.get('host')?.includes('localhost'))
+  const isHttps = !!(headersList.get('x-forwarded-proto') === 'https' || (headersList.get('host') && !headersList.get('host')?.includes('localhost')))
 
   return createServerClient(
     'https://yqhdxzihagyxaqiihdzt.supabase.co',
@@ -19,20 +19,18 @@ export async function createClient() {
             cookiesToSet.forEach(({ name, value, options }) => {
               const cleanOptions = { 
                 ...options,
-                secure: false, // Forçamos false para evitar que proxies http descartem
+                secure: isHttps,
                 sameSite: 'lax' as const
               };
               
-              // Garante que o cookie grude no domínio atual da requisição, não importando se é ngrok, localhost, etc.
+              // Garante que o cookie grude no domínio atual da requisição
               delete cleanOptions.domain;
 
-              console.log(`[AUTH DEBUG] Setando cookie: ${name}`, cleanOptions);
               cookieStore.set(name, value, cleanOptions);
             });
           } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+            // O método setAll foi chamado de um Server Component.
+            // Pode ser ignorado se o middleware está renovando a sessão.
           }
         },
       },
