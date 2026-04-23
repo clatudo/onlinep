@@ -28,36 +28,7 @@ const sanitizeDoc = (doc: string | undefined | null): string => {
   return String(doc).replace(/\D/g, '');
 };
 
-// Valida CPF pelo algoritmo de módulo 11
-const isValidCPF = (cpf: string): boolean => {
-  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (10 - i);
-  let rem = (sum * 10) % 11;
-  if (rem === 10 || rem === 11) rem = 0;
-  if (rem !== parseInt(cpf[9])) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (11 - i);
-  rem = (sum * 10) % 11;
-  if (rem === 10 || rem === 11) rem = 0;
-  return rem === parseInt(cpf[10]);
-};
-
-// Valida CNPJ pelo algoritmo de módulo 11
-const isValidCNPJ = (cnpj: string): boolean => {
-  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
-  const calc = (c: string, len: number) => {
-    let sum = 0, pos = len - 7;
-    for (let i = len; i >= 1; i--) {
-      sum += parseInt(c[len - i]) * pos--;
-      if (pos < 2) pos = 9;
-    }
-    return sum % 11 < 2 ? 0 : 11 - (sum % 11);
-  };
-  return calc(cnpj, 12) === parseInt(cnpj[12]) && calc(cnpj, 13) === parseInt(cnpj[13]);
-};
-
-// Monta o objeto identification: valida antes de enviar ao MP
+// Monta o objeto identification: valida tamanho antes de enviar ao MP
 const buildIdentification = (formData: any, userMeta: any): { type: string; number: string } | undefined => {
   const rawType = formData.payer?.identification?.type || (userMeta?.account_type === 'pj' ? 'CNPJ' : 'CPF');
   const rawNumber = formData.payer?.identification?.number || userMeta?.cpf || userMeta?.cnpj;
@@ -70,25 +41,18 @@ const buildIdentification = (formData: any, userMeta: any): { type: string; numb
     return undefined;
   }
 
-  // Validar checksum para evitar o erro "Invalid user identification number"
+// Valida o tamanho, mas deixa a validação matemática por conta do MercadoPago
+  // (Pois em testes é muito comum usar CPFs fictícios que falham na matemática)
   const isCPF = cleanNumber.length === 11;
   const isCNPJ = cleanNumber.length === 14;
 
-  if (isCPF && !isValidCPF(cleanNumber)) {
-    console.error('[MP] CPF inválido (falha no checksum):', cleanNumber);
-    throw new Error('CPF inválido. Por favor, verifique o CPF digitado e tente novamente.');
-  }
-  if (isCNPJ && !isValidCNPJ(cleanNumber)) {
-    console.error('[MP] CNPJ inválido (falha no checksum):', cleanNumber);
-    throw new Error('CNPJ inválido. Por favor, verifique o CNPJ digitado e tente novamente.');
-  }
   if (!isCPF && !isCNPJ) {
     console.error('[MP] Documento com tamanho inválido:', cleanNumber.length, 'dígitos');
-    throw new Error(`Documento inválido: ${cleanNumber.length} dígitos. CPF deve ter 11 e CNPJ 14 dígitos.`);
+    throw new Error(`Documento inválido: ${cleanNumber.length} dígitos. CPF deve ter 11 e CNPJ 14 dígitos (apenas números).`);
   }
 
   const finalType = isCNPJ ? 'CNPJ' : 'CPF';
-  console.log('[MP] Identification válida:', { type: finalType, number: cleanNumber });
+  console.log('[MP] Identification válida (tamanho OK):', { type: finalType, number: cleanNumber });
   return { type: finalType, number: cleanNumber };
 };
 
