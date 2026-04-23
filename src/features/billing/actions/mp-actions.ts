@@ -22,6 +22,25 @@ const splitName = (fullName: string) => {
   return { first_name, last_name };
 };
 
+// Remove tudo que não for dígito (pontos, traços, barras) — obrigatório para o MP
+const sanitizeDoc = (doc: string | undefined | null): string => {
+  if (!doc) return '';
+  return String(doc).replace(/\D/g, '');
+};
+
+// Monta o objeto identification sem enviar número vazio ao MP
+const buildIdentification = (formData: any, userMeta: any) => {
+  // O Brick já preenche type e number no formData.payer.identification
+  const rawType = formData.payer?.identification?.type || (userMeta?.account_type === 'pj' ? 'CNPJ' : 'CPF');
+  const rawNumber = formData.payer?.identification?.number || userMeta?.cpf || userMeta?.cnpj;
+  const cleanNumber = sanitizeDoc(rawNumber);
+
+  console.log('[MP] Identification:', { type: rawType, rawNumber, cleanNumber });
+
+  if (!cleanNumber) return undefined; // Não envia identificador vazio
+  return { type: rawType, number: cleanNumber };
+};
+
 export async function processPaymentAction(planId: PlanId, formData: any) {
   const { headers } = await import('next/headers');
   
@@ -53,6 +72,7 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
     const totalAmount = plan.price + (formData.domainType === 'new' ? (Number(formData.domainPrice) || 0) : 0);
 
     const nameObj = splitName(formData.fullName || user.user_metadata?.full_name || 'Cliente');
+    const identification = buildIdentification(formData, user.user_metadata);
 
     const paymentBody: any = {
       transaction_amount: totalAmount,
@@ -62,10 +82,7 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
         email: formData.payer?.email || user.email,
         first_name: nameObj.first_name,
         last_name: nameObj.last_name,
-        identification: {
-          type: user.user_metadata?.account_type === 'pj' ? 'CNPJ' : 'CPF',
-          number: formData.payer?.identification?.number || user.user_metadata?.cpf || user.user_metadata?.cnpj,
-        },
+        ...(identification ? { identification } : {}),
       },
     };
 
@@ -196,6 +213,7 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
     const payment = new Payment(client);
     
     const nameObj = splitName(user.user_metadata?.full_name || 'Cliente');
+    const identification = buildIdentification(formData, user.user_metadata);
 
     const paymentBody: any = {
       transaction_amount: Number(invoice.amount),
@@ -205,10 +223,7 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
         email: formData.payer?.email || user.email,
         first_name: nameObj.first_name,
         last_name: nameObj.last_name,
-        identification: {
-          type: user.user_metadata?.account_type === 'pj' ? 'CNPJ' : 'CPF',
-          number: formData.payer?.identification?.number || user.user_metadata?.cpf || user.user_metadata?.cnpj,
-        },
+        ...(identification ? { identification } : {}),
       },
     };
 
