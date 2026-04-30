@@ -163,7 +163,8 @@ export default function CheckoutPage() {
                 console.log('[FRONTEND] formData:', JSON.stringify(formData));
                 setIsProcessing(true);
                 
-                processPaymentAction(planId as PlanId, { ...formData, domain, domainType, domainPrice })
+                const totalAmount = (planDetails.price + (domainType === "new" ? (domainPrice || 0) : 0));
+                processPaymentAction(planId as PlanId, { ...formData, domain, domainType, domainPrice, transaction_amount: totalAmount })
                   .then(result => {
                     if (result.success) {
                       if (result.pix) {

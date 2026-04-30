@@ -84,7 +84,7 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
     // Processar Pagamento
     const payment = new Payment(client);
     
-    const totalAmount = plan.price + (formData.domainType === 'new' ? (Number(formData.domainPrice) || 0) : 0);
+    const totalAmount = Number(formData.transaction_amount) || plan.price + (formData.domainType === 'new' ? (Number(formData.domainPrice) || 0) : 0);
 
     // Buscar CPF/CNPJ do profile no banco (fallback robusto)
     const { data: profile } = await supabaseAdmin
@@ -140,11 +140,12 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
       paymentBody.token = formData.token;
       paymentBody.installments = formData.installments || 1;
       paymentBody.payment_method_id = formData.payment_method_id;
-      if (formData.issuer_id) paymentBody.issuer_id = formData.issuer_id;
+      if (formData.issuer_id) paymentBody.issuer_id = String(formData.issuer_id);
       const paymentTypeId = formData.payment_type_id || formData.paymentMethodTypeId || 'credit_card';
       paymentBody.payment_type_id = paymentTypeId;
-      paymentBody.binary_mode = true;
+      paymentBody.binary_mode = false;
       paymentBody.capture = true;
+      paymentBody.statement_descriptor = "ONLINEPROD";
     } else {
       // Pix / Boleto
       paymentBody.payment_method_id = formData.payment_method_id;
@@ -249,10 +250,16 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
 
     // Tentar extrair uma mensagem de erro mais amigável do MP
     let errorMsg = error.message || "Erro interno no processamento do pagamento.";
-    if (Array.isArray(cause)) {
-      const details = cause.map((c: any) => c.description || c.message || JSON.stringify(c)).join(' | ');
-      if (details) errorMsg = `Erro Mercado Pago: ${details}`;
+    
+    // Tratamento de erro aprimorado para objetos ou arrays
+    const errorData = error.response?.data || cause;
+    if (Array.isArray(errorData)) {
+      errorMsg = errorData.map((c: any) => c.description || c.message || JSON.stringify(c)).join(' | ');
+    } else if (typeof errorData === 'object') {
+      errorMsg = errorData.description || errorData.message || (errorData.cause && Array.isArray(errorData.cause) ? errorData.cause[0].description : JSON.stringify(errorData));
     }
+
+    if (!errorMsg || errorMsg === '{}') errorMsg = "Ocorreu um erro no Mercado Pago. Verifique os dados do cartão e CPF.";
 
     return { success: false, error: errorMsg };
   }
@@ -332,11 +339,12 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
       paymentBody.token = formData.token;
       paymentBody.installments = 1;
       paymentBody.payment_method_id = formData.payment_method_id;
-      if (formData.issuer_id) paymentBody.issuer_id = formData.issuer_id;
+      if (formData.issuer_id) paymentBody.issuer_id = String(formData.issuer_id);
       const paymentTypeId = formData.payment_type_id || formData.paymentMethodTypeId || 'credit_card';
       paymentBody.payment_type_id = paymentTypeId;
-      paymentBody.binary_mode = true;
+      paymentBody.binary_mode = false;
       paymentBody.capture = true;
+      paymentBody.statement_descriptor = "ONLINEPROD";
     } else {
       paymentBody.payment_method_id = formData.payment_method_id;
     }

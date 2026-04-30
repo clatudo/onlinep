@@ -117,7 +117,7 @@ export default function InvoiceCheckoutPage() {
                 console.log('[INVOICE FRONTEND] formData:', JSON.stringify(formData));
                 setPaymentLoading(true);
                 
-                processInvoicePaymentAction(invoiceId, formData)
+                processInvoicePaymentAction(invoiceId, { ...formData, transaction_amount: invoice.amount })
                   .then(result => {
                     if (result.success) {
                       if (result.pix) {
