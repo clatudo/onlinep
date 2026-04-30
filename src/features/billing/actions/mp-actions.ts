@@ -51,7 +51,7 @@ const buildIdentification = (formData: any, userMeta: any): { type: string; numb
     throw new Error(`Documento inválido: ${cleanNumber.length} dígitos. CPF deve ter 11 e CNPJ 14 dígitos (apenas números).`);
   }
 
-  const finalType = isCNPJ ? 'CNPJ' : 'CPF';
+  const finalType = cleanNumber.length === 14 ? 'CNPJ' : 'CPF';
   console.log('[MP] Identification válida (tamanho OK):', { type: finalType, number: cleanNumber });
   return { type: finalType, number: cleanNumber };
 };
@@ -86,8 +86,22 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
     
     const totalAmount = plan.price + (formData.domainType === 'new' ? (Number(formData.domainPrice) || 0) : 0);
 
-    const nameObj = splitName(formData.fullName || user.user_metadata?.full_name || 'Cliente');
-    const identification = buildIdentification(formData, user.user_metadata);
+    // Buscar CPF/CNPJ do profile no banco (fallback robusto)
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('cpf, cnpj, account_type, full_name')
+      .eq('id', user.id)
+      .single();
+
+    const mergedMeta = {
+      ...user.user_metadata,
+      cpf: profile?.cpf || user.user_metadata?.cpf,
+      cnpj: profile?.cnpj || user.user_metadata?.cnpj,
+      account_type: profile?.account_type || user.user_metadata?.account_type,
+    };
+
+    const nameObj = splitName(formData.fullName || profile?.full_name || user.user_metadata?.full_name || 'Cliente');
+    const identification = buildIdentification(formData, mergedMeta);
 
     const paymentBody: any = {
       transaction_amount: totalAmount,
@@ -99,6 +113,7 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
         last_name: nameObj.last_name,
         ...(identification ? { identification } : {}),
       },
+      notification_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br'}/api/webhooks/mercadopago`,
     };
 
     console.log('[MP] paymentBody payer:', JSON.stringify(paymentBody.payer));
@@ -109,10 +124,16 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
       paymentBody.installments = formData.installments || 1;
       paymentBody.payment_method_id = formData.payment_method_id;
       if (formData.issuer_id) paymentBody.issuer_id = formData.issuer_id;
+      const paymentTypeId = formData.payment_type_id || formData.paymentMethodTypeId || 'credit_card';
+      paymentBody.payment_type_id = paymentTypeId;
+      paymentBody.binary_mode = true;
+      paymentBody.capture = true;
     } else {
       // Pix / Boleto
       paymentBody.payment_method_id = formData.payment_method_id;
     }
+
+    console.log('[MP] FINAL paymentBody:', JSON.stringify(paymentBody, null, 2));
 
     const paymentResponse = await payment.create({ body: paymentBody });
 
@@ -236,8 +257,22 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
 
     const payment = new Payment(client);
     
-    const nameObj = splitName(user.user_metadata?.full_name || 'Cliente');
-    const identification = buildIdentification(formData, user.user_metadata);
+    // Buscar CPF/CNPJ do profile no banco (fallback robusto)
+    const { data: profileInvoice } = await supabaseAdmin
+      .from('profiles')
+      .select('cpf, cnpj, account_type, full_name')
+      .eq('id', user.id)
+      .single();
+
+    const mergedMetaInvoice = {
+      ...user.user_metadata,
+      cpf: profileInvoice?.cpf || user.user_metadata?.cpf,
+      cnpj: profileInvoice?.cnpj || user.user_metadata?.cnpj,
+      account_type: profileInvoice?.account_type || user.user_metadata?.account_type,
+    };
+    
+    const nameObj = splitName(profileInvoice?.full_name || user.user_metadata?.full_name || 'Cliente');
+    const identification = buildIdentification(formData, mergedMetaInvoice);
 
     const paymentBody: any = {
       transaction_amount: Number(invoice.amount),
@@ -249,6 +284,7 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
         last_name: nameObj.last_name,
         ...(identification ? { identification } : {}),
       },
+      notification_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br'}/api/webhooks/mercadopago`,
     };
 
     if (formData.token) {
@@ -256,9 +292,15 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
       paymentBody.installments = 1;
       paymentBody.payment_method_id = formData.payment_method_id;
       if (formData.issuer_id) paymentBody.issuer_id = formData.issuer_id;
+      const paymentTypeId = formData.payment_type_id || formData.paymentMethodTypeId || 'credit_card';
+      paymentBody.payment_type_id = paymentTypeId;
+      paymentBody.binary_mode = true;
+      paymentBody.capture = true;
     } else {
       paymentBody.payment_method_id = formData.payment_method_id;
     }
+
+    console.log('[MP INVOICE] FINAL paymentBody:', JSON.stringify(paymentBody, null, 2));
 
     const paymentResponse = await payment.create({ body: paymentBody });
 
