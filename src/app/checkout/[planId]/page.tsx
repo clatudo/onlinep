@@ -115,9 +115,14 @@ export default function CheckoutPage() {
 
       try {
         if (!mpInstance.current) {
-          // Usar a chave hardcoded como fallback caso a env var não esteja disponível em produção
-          const mpPublicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-ba6fa10c-c550-447b-b457-655b315e6645';
-          console.log('[CHECKOUT] Inicializando MP com chave:', mpPublicKey ? 'OK' : 'AUSENTE');
+          // Usar a chave do .env preferencialmente
+          const mpPublicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-3f8cb177-fd71-40fe-b8a5-8c436d7b3eb0';
+          console.log('[CHECKOUT] Inicializando MP com chave:', mpPublicKey);
+          
+          if (!mpPublicKey || mpPublicKey.includes('ba6fa10c')) {
+            console.error('[CHECKOUT] Chave Pública Inválida ou Fallback incorreto detectado.');
+          }
+
           mpInstance.current = new window.MercadoPago(mpPublicKey, {
             locale: 'pt-BR'
           });
