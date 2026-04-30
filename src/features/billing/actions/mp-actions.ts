@@ -114,6 +114,23 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
         ...(identification ? { identification } : {}),
       },
       notification_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br'}/api/webhooks/mercadopago`,
+      additional_info: {
+        items: [
+          {
+            id: planId,
+            title: plan.title,
+            description: plan.description,
+            category_id: 'services',
+            quantity: 1,
+            unit_price: totalAmount,
+          }
+        ],
+        payer: {
+          first_name: nameObj.first_name,
+          last_name: nameObj.last_name,
+          registration_date: user.created_at,
+        }
+      }
     };
 
     console.log('[MP] paymentBody payer:', JSON.stringify(paymentBody.payer));
@@ -222,14 +239,22 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
 
   } catch (error: any) {
     // Log completo do erro do MercadoPago para diagnóstico
-    const cause = error.cause || error.causes || error.errors || {};
+    const cause = error.cause || error.causes || error.errors || error.response?.data || {};
     console.error("=== ERRO CRÍTICO CHECKOUT ===", {
       message: error.message,
       status: error.status,
-      cause: JSON.stringify(cause),
+      cause: JSON.stringify(cause, null, 2),
       stack: error.stack?.split('\n').slice(0, 3).join(' | ')
     });
-    return { success: false, error: String(error.message || "Erro interno no processamento do pagamento.") };
+
+    // Tentar extrair uma mensagem de erro mais amigável do MP
+    let errorMsg = error.message || "Erro interno no processamento do pagamento.";
+    if (Array.isArray(cause)) {
+      const details = cause.map((c: any) => c.description || c.message || JSON.stringify(c)).join(' | ');
+      if (details) errorMsg = `Erro Mercado Pago: ${details}`;
+    }
+
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -285,6 +310,22 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
         ...(identification ? { identification } : {}),
       },
       notification_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br'}/api/webhooks/mercadopago`,
+      additional_info: {
+        items: [
+          {
+            id: invoiceId,
+            title: `Fatura #${invoiceId.split('-')[0]}`,
+            category_id: 'services',
+            quantity: 1,
+            unit_price: Number(invoice.amount),
+          }
+        ],
+        payer: {
+          first_name: nameObj.first_name,
+          last_name: nameObj.last_name,
+          registration_date: user.created_at,
+        }
+      }
     };
 
     if (formData.token) {
@@ -348,7 +389,18 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
     };
 
   } catch (error: any) {
-    console.error("=== ERRO AO PAGAR FATURA ===", error.message, JSON.stringify(error.cause || {}));
-    return { success: false, error: String(error.message || "Falha no pagamento da fatura.") };
+    const cause = error.cause || error.causes || error.errors || error.response?.data || {};
+    console.error("=== ERRO AO PAGAR FATURA ===", {
+      message: error.message,
+      cause: JSON.stringify(cause, null, 2)
+    });
+    
+    let errorMsg = error.message || "Falha no pagamento da fatura.";
+    if (Array.isArray(cause)) {
+      const details = cause.map((c: any) => c.description || c.message || JSON.stringify(c)).join(' | ');
+      if (details) errorMsg = `Erro Mercado Pago: ${details}`;
+    }
+
+    return { success: false, error: errorMsg };
   }
 }
