@@ -135,21 +135,8 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
 
     console.log('[MP] paymentBody payer:', JSON.stringify(paymentBody.payer));
 
-    if (formData.token) {
-      // Cartão de crédito/débito
-      paymentBody.token = formData.token;
-      paymentBody.installments = formData.installments || 1;
-      paymentBody.payment_method_id = formData.payment_method_id;
-      if (formData.issuer_id) paymentBody.issuer_id = String(formData.issuer_id);
-      const paymentTypeId = formData.payment_type_id || formData.paymentMethodTypeId || 'credit_card';
-      paymentBody.payment_type_id = paymentTypeId;
-      paymentBody.binary_mode = false;
-      paymentBody.capture = true;
-      paymentBody.statement_descriptor = "ONLINEPROD";
-    } else {
-      // Pix / Boleto
-      paymentBody.payment_method_id = formData.payment_method_id;
-    }
+    // Apenas Pix/Boleto (Sem Cartão por enquanto)
+    paymentBody.payment_method_id = formData.payment_method_id;
 
     console.log('[MP] FINAL paymentBody:', JSON.stringify(paymentBody, null, 2));
 
@@ -335,19 +322,8 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
       }
     };
 
-    if (formData.token) {
-      paymentBody.token = formData.token;
-      paymentBody.installments = 1;
-      paymentBody.payment_method_id = formData.payment_method_id;
-      if (formData.issuer_id) paymentBody.issuer_id = String(formData.issuer_id);
-      const paymentTypeId = formData.payment_type_id || formData.paymentMethodTypeId || 'credit_card';
-      paymentBody.payment_type_id = paymentTypeId;
-      paymentBody.binary_mode = false;
-      paymentBody.capture = true;
-      paymentBody.statement_descriptor = "ONLINEPROD";
-    } else {
-      paymentBody.payment_method_id = formData.payment_method_id;
-    }
+    // Apenas Pix/Boleto (Sem Cartão por enquanto)
+    paymentBody.payment_method_id = formData.payment_method_id;
 
     console.log('[MP INVOICE] FINAL paymentBody:', JSON.stringify(paymentBody, null, 2));
 

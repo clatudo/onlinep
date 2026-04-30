@@ -99,10 +99,7 @@ export default function InvoiceCheckoutPage() {
           customization: {
             visual: { style: { theme: 'default' } },
             paymentMethods: {
-              creditCard: 'all',
-              debitCard: 'all',
-              ticket: 'all',
-              bankTransfer: 'all',
+              bankTransfer: ['pix'],
               maxInstallments: 1
             },
           },
