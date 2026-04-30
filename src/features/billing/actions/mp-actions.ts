@@ -113,7 +113,7 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
         last_name: nameObj.last_name,
         ...(identification ? { identification } : {}),
       },
-      notification_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br'}/api/webhooks/mercadopago`,
+      notification_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhooks/mercadopago`,
       additional_info: {
         items: [
           {
@@ -309,7 +309,7 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
         last_name: nameObj.last_name,
         ...(identification ? { identification } : {}),
       },
-      notification_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br'}/api/webhooks/mercadopago`,
+      notification_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhooks/mercadopago`,
       additional_info: {
         items: [
           {

@@ -76,9 +76,9 @@ export default function InvoiceCheckoutPage() {
 
       try {
         if (!mpInstance.current) {
-          const mpPublicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-ba6fa10c-c550-447b-b457-655b315e6645';
-          console.log('[INVOICE CHECKOUT] Inicializando MP com chave:', mpPublicKey ? 'OK' : 'AUSENTE');
-          mpInstance.current = new window.MercadoPago(mpPublicKey, {
+          const mpPublicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
+          console.log('[CHECKOUT] Inicializando MP com chave:', mpPublicKey ? 'OK' : 'AUSENTE');
+          mpInstance.current = new window.MercadoPago(mpPublicKey || '', {
             locale: 'pt-BR'
           });
         }
