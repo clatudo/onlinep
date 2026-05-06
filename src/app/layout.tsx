@@ -4,6 +4,7 @@ import { ReactQueryProvider } from "@/lib/react-query";
 import { WhatsAppFab } from "@/components/ui/WhatsAppFab";
 import Script from "next/script";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next"; // Importação correta para Next.js
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,10 +40,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col tracking-tight selection:bg-primary/30 selection:text-primary">
         <ReactQueryProvider>
           {children}
+          <Analytics />
           <WhatsAppFab />
         </ReactQueryProvider>
-        <Script 
-          src="https://sdk.mercadopago.com/js/v2" 
+        <Script
+          src="https://sdk.mercadopago.com/js/v2"
           strategy="afterInteractive"
         />
       </body>
