@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowRight, ShieldCheck, FileText, CheckCircle2, ShoppingCart, Globe, Server } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Loader2, ArrowRight, ShieldCheck, FileText, CheckCircle2, ShoppingCart, Globe, Server, AlertCircle } from "lucide-react";
 import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
 import { createPreferenceAction } from "@/features/billing/actions/mp-actions";
 import { PlanId, PLANS } from "@/features/billing/constants";
@@ -73,6 +73,7 @@ CLÁUSULA OITAVA – DO FORO
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const planId = (params.planId as string) || "starter";
   const planDetails = PLANS[planId as PlanId];
 
@@ -90,6 +91,16 @@ export default function CheckoutPage() {
   const [pixData, setPixData] = useState<{qr_code: string, qr_code_base64: string} | null>(null);
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
+
+  // Detectar retorno de erro do Mercado Pago
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const status = searchParams.get("status");
+    
+    if (success === "false" || status === "rejected" || status === "cancelled") {
+      setErrorMsg("O pagamento não pôde ser concluído ou foi recusado. Por favor, revise seus dados ou tente outro meio de pagamento.");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     console.log("[CHECKOUT] Hidratação Concluída. PlanId:", planId);
@@ -171,6 +182,16 @@ export default function CheckoutPage() {
 
         <div className="p-8 md:p-10">
           
+          {errorMsg && (
+            <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl animate-in slide-in-from-top duration-500 shadow-sm">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="text-red-600 w-6 h-6 shrink-0" />
+                <p className="text-red-700 font-bold text-sm italic leading-tight">
+                  {errorMsg}
+                </p>
+              </div>
+            </div>
+          )}
           {step === 0 && (
             <div className="space-y-8">
               <div className="space-y-4 text-center mb-8">
@@ -291,11 +312,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {errorMsg && (
-                <div id="error-alert" className="p-4 bg-red-50 border border-red-500 rounded-lg text-red-600 text-sm font-bold text-center italic">
-                  {errorMsg}
-                </div>
-              )}
 
               <div className="space-y-3">
                  <h2 className="text-lg font-extrabold flex items-center gap-2">
@@ -407,11 +423,6 @@ export default function CheckoutPage() {
                  </div>
               </div>
 
-              {errorMsg && (
-                <div className="p-4 mb-6 bg-red-50 border border-red-500 rounded-lg text-red-600 text-sm font-bold text-center italic">
-                  {errorMsg}
-                </div>
-              )}
 
               {/* Componente Wallet do Checkout Pro */}
               <div className="animate-in fade-in duration-500 min-h-[150px]">
