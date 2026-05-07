@@ -41,20 +41,30 @@ export async function updateSession(request: NextRequest) {
   const isProtectedRoute = request.nextUrl.pathname.startsWith('/checkout') || request.nextUrl.pathname.startsWith('/cliente')
   const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
 
-  // Se tenta acessar rota protegida sem logar -> joga pro login
+  // Se tenta acessar rota protegida sem logar -> joga pro login salvando o destino original
   if (isProtectedRoute && !user) {
     const url = request.nextUrl.clone()
+    const next = url.pathname + url.search
     url.pathname = '/auth/login'
+    url.searchParams.set('next', next)
     return NextResponse.redirect(url)
   }
 
-  // Se ja ta logado e tenta ir para tela de login -> joga pro dashboard do cliente
+  // Se ja ta logado e tenta ir para tela de login -> joga pro dashboard ou destino salvo
   // EXCEÇÃO: Se for a página de reset de senha, permitimos que ele continue para trocar a senha.
   const isResetPasswordRoute = request.nextUrl.pathname === '/auth/reset-password'
   
   if (isAuthRoute && user && !isResetPasswordRoute) {
+     const next = request.nextUrl.searchParams.get('next')
      const url = request.nextUrl.clone()
+     
+     // Se houver um destino salvo, redireciona para ele, caso contrário para o dashboard
+     if (next) {
+       return NextResponse.redirect(new URL(next, request.url))
+     }
+     
      url.pathname = '/cliente/dashboard'
+     url.searchParams.delete('next')
      return NextResponse.redirect(url)
   }
 

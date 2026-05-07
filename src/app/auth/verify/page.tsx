@@ -1,7 +1,10 @@
 import { MailCheck } from "lucide-react";
 import Link from "next/link";
 
-export default function VerifyPage() {
+export default function VerifyPage({ searchParams }: { searchParams: { next?: string } }) {
+  const next = searchParams.next;
+  const loginUrl = next ? `/auth/login?next=${encodeURIComponent(next)}` : "/auth/login";
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#FAFBFA] p-4 font-sans">
       <div className="w-full max-w-md bg-white border border-black/5 shadow-[0_20px_60px_rgba(0,0,0,0.05)] rounded-[2.5rem] p-10 text-center animate-in fade-in zoom-in duration-500">
@@ -20,7 +23,7 @@ export default function VerifyPage() {
         </p>
 
         <Link 
-          href="/auth/login" 
+          href={loginUrl} 
           className="block w-full bg-[#131A26] hover:bg-[#252f3d] text-white rounded-full py-5 text-xs font-bold tracking-widest uppercase italic transition-all hover:scale-[1.02] shadow-lg"
         >
           Ir para o Login

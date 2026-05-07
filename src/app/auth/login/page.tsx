@@ -1,8 +1,12 @@
 import { LoginForm } from "@/features/auth/components/LoginForm";
 import Link from "next/link";
-import { Cpu } from "lucide-react";
+import { Cpu, Loader2 } from "lucide-react";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: { searchParams: { next?: string } }) {
+  const next = searchParams.next;
+  const registerUrl = next ? `/auth/register?next=${encodeURIComponent(next)}` : "/auth/register";
+
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-muted/30">
       <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
@@ -18,7 +22,7 @@ export default function LoginPage() {
         </h2>
         <p className="mt-2 text-center text-sm text-foreground/70">
           Ou{" "}
-          <Link href="/auth/register" className="font-medium text-[#DE2027] hover:text-[#DE2027]/80">
+          <Link href={registerUrl} className="font-medium text-[#DE2027] hover:text-[#DE2027]/80">
             crie uma nova conta gratuita
           </Link>
         </p>
@@ -26,7 +30,13 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-background py-8 px-4 shadow neo-shadow sm:rounded-xl sm:px-10 border border-border">
-          <LoginForm />
+          <Suspense fallback={
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-8 h-8 animate-spin text-[#DE2027]" />
+            </div>
+          }>
+            <LoginForm />
+          </Suspense>
         </div>
       </div>
     </div>

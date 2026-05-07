@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signInAction } from "../actions/auth";
 import { loginSchema } from "../schemas";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const {
@@ -37,9 +39,8 @@ export function LoginForm() {
       if (result?.error) {
         setErrorMsg(result.error);
       } else {
-        // Usamos window.location.href em vez de router.push para contornar
-        // o cache agressivo de rotas do Next.js (RSC cache) que pode ter guardado o estado deslogado.
-        window.location.href = "/cliente/dashboard";
+        // Redireciona para 'next' se existir, caso contrário para o dashboard padrão
+        window.location.href = next || "/cliente/dashboard";
       }
     } catch (err: any) {
       console.error("Erro ao chamar Server Action:", err);

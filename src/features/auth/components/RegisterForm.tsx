@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signUpAction } from "../actions/auth";
 import { registerSchema } from "../schemas";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [clientIp, setClientIp] = useState("");
@@ -117,7 +119,8 @@ export function RegisterForm() {
       
       if(result?.success) {
         setSuccessMsg(result.success);
-        setTimeout(() => router.push("/auth/verify"), 2000);
+        const verifyUrl = next ? `/auth/verify?next=${encodeURIComponent(next)}` : "/auth/verify";
+        setTimeout(() => router.push(verifyUrl), 2000);
       }
     } catch (err: any) {
       console.error("Erro crítico no onSubmit:", err);
