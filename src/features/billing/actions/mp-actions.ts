@@ -483,7 +483,7 @@ export async function createPreferenceAction(planId: PlanId, formData: any) {
       external_reference: contractData.id, // Para o webhook encontrar o contrato e ativar a assinatura
       back_urls: {
         success: `${siteUrl}/cliente/dashboard?success=true`,
-        failure: `${siteUrl}/checkout/${planId}?success=false`,
+        failure: `${siteUrl}/checkout/${planId}?success=false&domain=${encodeURIComponent(formData.domain || '')}&domainType=${formData.domainType || ''}`,
         pending: `${siteUrl}/cliente/dashboard?success=pending`
       },
       auto_return: 'approved' as const,

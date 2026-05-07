@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Loader2, ArrowRight, ShieldCheck, FileText, CheckCircle2, ShoppingCart, Globe, Server, AlertCircle } from "lucide-react";
 import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
@@ -13,64 +13,33 @@ if (process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY) {
   initMercadoPago(process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY);
 }
 
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
+const CONTRACT_BODY = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE HOSPEDAGEM DE SITES
 
-const CONTRACT_BODY = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE HOSPEDAGEM DE "WEBSITE"
+1. OBJETO
+O presente contrato tem por objeto a prestação de serviços de hospedagem de sites e registro de domínios na infraestrutura da contratada.
 
-CONTRATADA: RAZAO SOCIAL (ON-LINE PRODUÇÕES), com sede na Rua Soraia, nº 636, Jardim Soraia, São José do Rio Preto – SP, inscrita no CNPJ sob nº 00.000.000/0000-00.
+2. PREÇO E PAGAMENTO
+O usuário compromete-se a pagar o valor referente ao plano escolhido no ato da contratação. A ativação dos serviços ocorre após a confirmação do pagamento.
 
-CONTRANTE: Pessoa Física ou Jurídica, qualificada na "SOLICITAÇÃO DE SERVIÇO", que é parte integrante deste instrumento.
-CLÁUSULA PRIMEIRA – DO OBJETO E ESPECIFICAÇÕES
+3. PRAZO
+Este contrato tem validade mensal, renovando-se automaticamente mediante o pagamento da mensalidade subsequente.
 
-1.1. Disponibilização de espaço em servidor compartilhado para hospedagem de "website" e domínio.
-1.2. Recursos técnicos conforme o plano aderido:
-    Espaço e Transferência: Variando de 100MB a 400MB de disco e 1GB a 5GB de tráfego mensal.
-    Recursos: Contas de e-mail (30MB cada), Webmail, FTP, Backup diário e estatísticas.
-    Tecnologias: Servidor Windows; ASP, ASP.NET, PHP, SSL, XML; Access, MYSQL.
+4. CANCELAMENTO
+O cancelamento pode ser solicitado a qualquer momento através do painel do cliente, sem multas rescisórias, interrompendo a próxima cobrança.
 
-CLÁUSULA SEGUNDA – DO SUPORTE E LIMITAÇÕES
+5. SUPORTE
+O suporte técnico será prestado através dos canais oficiais (ticket e e-mail) em horário comercial.
 
-2.1. O suporte técnico limita-se exclusivamente ao funcionamento do servidor de hospedagem.
-2.2. Não estão incluídos: suporte a desenvolvimento HTML, scripts (PHP, ASP, JS), criação de bancos de dados ou design.
-2.3. A CONTRATADA manterá conectividade de 99,5% ao mês, salvo interrupções para ajustes técnicos superiores a 3 horas, as quais serão comunicadas via e-mail.
+6. RESPONSABILIDADE
+A contratada não se responsabiliza pelo conteúdo publicado pelo usuário, bem como por backups não realizados pelo contratante.
 
-CLÁUSULA TERCEIRA – DAS OBRIGAÇÕES E CONDUTAS PROIBIDAS
+7. PRIVACIDADE
+Os dados do usuário serão tratados com confidencialidade e segurança, em conformidade com a Lei Geral de Proteção de Dados (LGPD).
 
-3.1. O CONTRATANTE é o único responsável pelo conteúdo publicado e deve garantir que não viole leis federais, estaduais ou municipais.
-3.2. SPAM: É terminantemente proibido o envio de mensagens não solicitadas (SPAM), sob pena de suspensão imediata.
-3.3. O CONTRATANTE deve realizar suas próprias transferências de arquivos, criação de e-mails e troca de DNS, salvo se contratados como serviços adicionais.
-
-CLÁUSULA QUARTA – ANTIVÍRUS E SEGURANÇA
-
-4.1. A CONTRATADA oferece antivírus para e-mails, porém não garante proteção integral contra vírus desconhecidos ou falhas do software.
-4.2. A CONTRATADA não se responsabiliza por danos decorrentes de arquivos contaminados trafegados ou pelo uso indevido de senhas.
-
-CLÁUSULA QUINTA – FINANCEIRO E REAJUSTE
-
-5.1. Mensalidades antecipadas com vencimento todo dia 10.
-5.2. O atraso gera multa de 2% e juros de 1% ao mês. Após 5 dias de atraso, o serviço será suspenso.
-5.3. Se a suspensão exceder 10 dias, será cobrada taxa de reativação de R$ 15,00.
-5.4. Reajuste: Os valores serão reajustados anualmente pelo IGP-DI, mediante aviso prévio de 30 dias.
-
-CLÁUSULA SEXTA – PROTEÇÃO DE DADOS E LGPD
-
-6.1. Ambas as partes devem cumprir a Lei 13.709/2018. A CONTRATADA manterá sigilo absoluto sobre os dados do sistema do CONTRATANTE.
-6.2. Eventuais indenizações por falhas técnicas limitam-se ao valor de uma mensalidade do plano, excluindo lucros cessantes.
-
-CLÁUSULA SÉTIMA – VIGÊNCIA E RESCISÃO
-
-7.1. Prazo de 3 meses, prorrogável automaticamente.
-7.2. Denúncia por qualquer parte com 30 dias de antecedência.
-7.3. A rescisão plena exige a quitação de débitos e a efetiva retirada do DNS dos servidores da ON-LINE PRODUÇÕES.
-
-CLÁUSULA OITAVA – DO FORO
+8. FORO
 8.1. Eleito o foro de São José do Rio Preto – SP.`;
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -78,42 +47,36 @@ export default function CheckoutPage() {
   const planDetails = PLANS[planId as PlanId];
 
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
-  const [domain, setDomain] = useState("");
-  const [domainType, setDomainType] = useState<"new" | "existing">("existing");
+  
+  // Estados de Domínio - Inicializados via URL se houver retorno do MP
+  const [domain, setDomain] = useState(searchParams.get("domain") || "");
+  const [domainType, setDomainType] = useState<"new" | "existing">((searchParams.get("domainType") as "new" | "existing") || "existing");
   const [domainPrice, setDomainPrice] = useState<number | null>(null);
   const [checkingDomain, setCheckingDomain] = useState(false);
   const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
   const [agreed, setAgreed] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Carregamento do Brick
-  const [isProcessing, setIsProcessing] = useState(false); // Processamento do Pagamento
+  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [pixData, setPixData] = useState<{qr_code: string, qr_code_base64: string} | null>(null);
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
 
-  // Detectar retorno de erro do Mercado Pago
+  // Detectar retorno de erro do Mercado Pago e Logs de Depuração
   useEffect(() => {
     const success = searchParams.get("success");
     const status = searchParams.get("status");
+    const domainFromUrl = searchParams.get("domain");
+    
+    console.log("[CHECKOUT] Retorno MP:", { success, status, domainFromUrl });
     
     if (success === "false" || status === "rejected" || status === "cancelled") {
       setErrorMsg("O pagamento não pôde ser concluído ou foi recusado. Por favor, revise seus dados ou tente outro meio de pagamento.");
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    console.log("[CHECKOUT] Hidratação Concluída. PlanId:", planId);
-  }, [planId]);
-
   const contractRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mpInstance = useRef<any>(null);
-  const brickInstance = useRef<any>(null);
 
-
-  // O Mercado Pago agora é gerenciado pelo componente <Wallet />
-  // Apenas garantimos que o scroll volte ao topo ao mudar de passo
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [step]);
@@ -128,12 +91,11 @@ export default function CheckoutPage() {
     }
 
     const timer = setTimeout(() => {
-      // Validar regex básico antes de chamar API
       const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/;
       if (domainRegex.test(domain)) {
         handleCheckDomain();
       }
-    }, 1000); // Aguarda 1s após parar de digitar
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [domain, domainType]);
@@ -155,7 +117,6 @@ export default function CheckoutPage() {
       }
     } catch (e: any) {
       setErrorMsg("Erro de conexão ao verificar domínio. Tente novamente.");
-      console.error("Erro check:", e);
     } finally {
       setCheckingDomain(false);
     }
@@ -163,7 +124,6 @@ export default function CheckoutPage() {
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    // Tolerância de 5px para detectar o fim do scroll
     if (scrollTop + clientHeight >= scrollHeight - 5) {
       setIsScrolledToBottom(true);
     }
@@ -192,6 +152,7 @@ export default function CheckoutPage() {
               </div>
             </div>
           )}
+
           {step === 0 && (
             <div className="space-y-8">
               <div className="space-y-4 text-center mb-8">
@@ -271,8 +232,6 @@ export default function CheckoutPage() {
 
           {step === 1 && (
             <div className="space-y-8">
-              
-              {/* Resumo do Pedido - Novo Compoment */}
               <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 shadow-sm mb-6">
                 <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-2">
                   <ShoppingCart className="w-3 h-3" /> Resumo do Pedido
@@ -312,7 +271,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-
               <div className="space-y-3">
                  <h2 className="text-lg font-extrabold flex items-center gap-2">
                    <FileText className="w-5 h-5 text-[#DE2027]" />
@@ -323,8 +281,7 @@ export default function CheckoutPage() {
                    onScroll={handleScroll}
                    className="bg-gray-50 border border-gray-200 rounded-xl p-6 h-72 overflow-y-auto text-xs font-mono text-gray-700 whitespace-pre-wrap shadow-inner leading-relaxed"
                  >
-                   {CONTRACT_BODY.split('8.1. ')[0]}
-                   8.1. Eleito o foro de São José do Rio Preto – SP.
+                   {CONTRACT_BODY}
                  </div>
               </div>
 
@@ -335,10 +292,7 @@ export default function CheckoutPage() {
                    type="checkbox"
                    disabled={!isScrolledToBottom}
                    checked={agreed}
-                   onChange={(e) => {
-                     console.log("[CHECKOUT] Mudança Termos:", e.target.checked);
-                     setAgreed(e.target.checked);
-                   }}
+                   onChange={(e) => setAgreed(e.target.checked)}
                    className={`mt-1 w-5 h-5 sm:w-6 sm:h-6 accent-[#DE2027] ${!isScrolledToBottom ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                  />
                  <div>
@@ -357,44 +311,26 @@ export default function CheckoutPage() {
                    <p className="text-4xl font-black text-[#131A26]">
                      R$ {(planDetails.price + (domainType === "new" ? (domainPrice || 0) : 0)).toFixed(2).replace('.', ',')}
                    </p>
-                   {domainType === "new" && domainPrice && (
-                     <p className="text-[9px] text-gray-400 font-bold italic uppercase tracking-tighter">
-                       Inclui registro de domínio (R$ {domainPrice.toFixed(2).replace('.', ',')})
-                     </p>
-                   )}
                  </div>
                  
                  <button
                     type="button"
-                    prev-id="btn-subscribe-step1"
                     disabled={!agreed}
                     className={`w-full sm:w-auto px-10 py-7 rounded-full shadow-2xl font-black uppercase italic tracking-widest transition-all text-white flex items-center justify-center ${agreed ? 'bg-[#DE2027] hover:scale-105 active:scale-95' : 'bg-gray-400 cursor-not-allowed'}`}
-                     onClick={async (e) => {
+                    onClick={async (e) => {
                        e.preventDefault();
-                       e.stopPropagation();
-                       if (!agreed) {
-                         setErrorMsg("Por favor, marque a caixa confirmando que leu e aceita os termos.");
-                         return;
-                       }
-                       
                        setIsLoading(true);
                        setErrorMsg(null);
-                       
                        try {
-                         const result = await createPreferenceAction(planId as PlanId, {
-                           domain,
-                           domainType,
-                           domainPrice
-                         });
-
+                         const result = await createPreferenceAction(planId as PlanId, { domain, domainType, domainPrice });
                          if (result.success && result.preferenceId) {
                            setPreferenceId(result.preferenceId);
                            setStep(2);
                          } else {
-                           setErrorMsg(result.error || "Erro ao gerar preferência de pagamento.");
+                           setErrorMsg(result.error || "Erro ao gerar preferência.");
                          }
-                       } catch (err: any) {
-                         setErrorMsg("Erro de conexão com o servidor.");
+                       } catch (err) {
+                         setErrorMsg("Erro de conexão.");
                        } finally {
                          setIsLoading(false);
                        }
@@ -408,8 +344,6 @@ export default function CheckoutPage() {
 
           {step === 2 && (
             <div className="py-10">
-              
-              {/* Resumo Rápido no topo do Pagamento */}
               <div className="bg-[#131A26] text-white rounded-2xl p-4 mb-8 flex justify-between items-center shadow-lg">
                  <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total da Contratação</p>
@@ -423,13 +357,9 @@ export default function CheckoutPage() {
                  </div>
               </div>
 
-
-              {/* Componente Wallet do Checkout Pro */}
               <div className="animate-in fade-in duration-500 min-h-[150px]">
                 {preferenceId ? (
-                  <Wallet 
-                    initialization={{ preferenceId }} 
-                  />
+                  <Wallet initialization={{ preferenceId }} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12">
                     <Loader2 className="w-10 h-10 animate-spin text-[#DE2027] mb-4" />
@@ -438,66 +368,88 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {!isLoading && !isProcessing && (
-                <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between">
-                  <button onClick={() => setStep(1)} className="text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-[#DE2027]">
-                    Voltar ao contrato
-                  </button>
-                  <button onClick={() => setStep(0)} className="text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-[#DE2027]">
-                    Trocar domínio
-                  </button>
-                </div>
-              )}
+              <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between">
+                <button onClick={() => setStep(1)} className="text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-[#DE2027]">
+                  Voltar ao contrato
+                </button>
+                <button onClick={() => setStep(0)} className="text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-[#DE2027]">
+                  Trocar domínio
+                </button>
+              </div>
             </div>
           )}
 
           {step === 3 && (
-            <div className="flex flex-col items-center py-10 space-y-6 animate-in zoom-in duration-500">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle2 className="w-12 h-12 text-green-600" />
-              </div>
-              <h3 className="text-3xl font-black text-[#131A26] italic uppercase tracking-tighter text-center">
-                {pixData ? 'Pagamento PIX Gerado!' : 'Tudo Pronto!'}
-              </h3>
-              
-              {pixData ? (
-                <div className="flex flex-col items-center space-y-4 w-full text-center">
-                   <p className="text-gray-500 font-medium italic">Abra o app do seu banco e escaneie o código abaixo ou use o Copia e Cola para pagar e ativar sua hospedagem.</p>
-                   <img src={`data:image/jpeg;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" className="w-48 h-48 border-4 border-gray-100 rounded-2xl shadow-sm" />
-                   
-                   <div className="w-full">
-                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Código Copia e Cola</p>
-                     <div className="flex w-full items-center gap-2">
-                       <input 
-                         type="text" 
-                         readOnly 
-                         value={pixData.qr_code} 
-                         className="flex-1 text-xs bg-gray-50 border border-gray-200 p-3 rounded-lg overflow-hidden text-ellipsis"
-                         onClick={(e) => (e.target as HTMLInputElement).select()}
-                       />
-                       <Button 
-                         variant="outline" 
-                         className="px-4 py-3 shrink-0"
-                         onClick={() => {
-                           navigator.clipboard.writeText(pixData.qr_code);
-                           alert("Código Copiado com Sucesso!");
-                         }}
-                       >
-                         Copiar
-                       </Button>
-                     </div>
-                   </div>
-                </div>
-              ) : (
-                <p className="text-gray-500 font-medium text-center italic">Sua hospedagem foi ativada com sucesso e o pagamento foi processado.</p>
-              )}
-              
-              <Button className="bg-[#131A26] text-white px-10 py-6 rounded-full font-black uppercase italic tracking-widest mt-4 w-full sm:w-auto" onClick={() => router.push('/cliente/dashboard')}>Ir ao Painel</Button>
+            <div className="py-10 text-center space-y-6 animate-in zoom-in duration-500">
+               <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="w-12 h-12" />
+               </div>
+               <h2 className="text-3xl font-black uppercase italic tracking-tighter text-[#131A26]">
+                 {pixData ? 'Pagamento PIX Gerado!' : 'Assinatura Realizada!'}
+               </h2>
+               
+               {pixData ? (
+                 <div className="flex flex-col items-center space-y-4 w-full text-center">
+                    <p className="text-gray-500 font-medium italic">Abra o app do seu banco e escaneie o código abaixo ou use o Copia e Cola para pagar e ativar sua hospedagem.</p>
+                    <img src={`data:image/jpeg;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" className="w-48 h-48 border-4 border-gray-100 rounded-2xl shadow-sm" />
+                    
+                    <div className="w-full">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Código Copia e Cola</p>
+                      <div className="flex w-full items-center gap-2">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={pixData.qr_code} 
+                          className="flex-1 text-xs bg-gray-50 border border-gray-200 p-3 rounded-lg overflow-hidden text-ellipsis"
+                          onClick={(e) => (e.target as HTMLInputElement).select()}
+                        />
+                        <Button 
+                          variant="outline" 
+                          className="px-4 py-3 shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(pixData.qr_code);
+                            alert("Código Copiado com Sucesso!");
+                          }}
+                        >
+                          Copiar
+                        </Button>
+                      </div>
+                    </div>
+                 </div>
+               ) : (
+                 <p className="text-gray-500 font-medium max-w-md mx-auto">
+                   Tudo pronto! Sua assinatura foi processada e sua hospedagem está sendo ativada.
+                 </p>
+               )}
+
+               <button 
+                onClick={() => router.push("/cliente/dashboard")}
+                className="bg-[#131A26] hover:bg-black text-white px-12 py-5 rounded-full font-black uppercase italic tracking-widest transition-all shadow-xl hover:scale-105 mt-6"
+               >
+                 Acessar meu Painel
+               </button>
             </div>
           )}
         </div>
+
+        <div className="bg-gray-50 p-4 border-t border-gray-100 text-center">
+           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center justify-center gap-2">
+             <ShieldCheck className="w-3 h-3 text-green-500" /> Tecnologia Mercado Pago com Segurança On-line Produções
+           </p>
+        </div>
       </div>
-      <p className="text-[10px] uppercase font-bold tracking-widest text-gray-400 opacity-50 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#DE2027]" /> Tecnologia Mercado Pago com Segurança On-line Produções</p>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFBFA]">
+        <Loader2 className="w-12 h-12 animate-spin text-[#DE2027]" />
+      </div>
+    }>
+      <CheckoutContent />
+    </Suspense>
   );
 }
