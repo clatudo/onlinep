@@ -41,11 +41,22 @@ export async function POST(req: NextRequest) {
             .update({ status: mpStatus })
             .eq("id", contract.subscription_id);
 
-          // Atualiza a fatura inicial gerada (tem o ID transacional no mp_preference_id)
-          await supabaseAdmin
-            .from("invoices")
-            .update({ status: invoiceStatus })
-            .eq("mp_preference_id", resourceId.toString());
+          // Atualiza a fatura inicial
+          // Primeiro tenta pelo mp_preference_id (Checkout Pro)
+          // Se não encontrar, tenta pelo resourceId (Pix/Antigo)
+          const prefId = (payment as any).preference_id;
+          
+          if (prefId) {
+            await supabaseAdmin
+              .from("invoices")
+              .update({ status: invoiceStatus, mp_payment_url: resourceId.toString() }) // Guardamos o ID do pagamento aqui se quiser
+              .eq("mp_preference_id", prefId);
+          } else {
+            await supabaseAdmin
+              .from("invoices")
+              .update({ status: invoiceStatus })
+              .eq("mp_preference_id", resourceId.toString());
+          }
         } else {
           // 2. Se não encontrou contrato, pode ser um pagamento direto de Fatura (external_reference == invoice.id)
           const { data: invoice } = await supabaseAdmin

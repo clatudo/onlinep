@@ -3,9 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, ArrowRight, ShieldCheck, FileText, CheckCircle2, ShoppingCart, Globe, Server } from "lucide-react";
-import { processPaymentAction } from "@/features/billing/actions/mp-actions";
+import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
+import { createPreferenceAction } from "@/features/billing/actions/mp-actions";
 import { PlanId, PLANS } from "@/features/billing/constants";
 import { Button } from "@/components/ui/button";
+
+// Inicializa o Mercado Pago
+if (process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY) {
+  initMercadoPago(process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY);
+}
 
 declare global {
   interface Window {
@@ -83,6 +89,7 @@ export default function CheckoutPage() {
   const [success, setSuccess] = useState(false);
   const [pixData, setPixData] = useState<{qr_code: string, qr_code_base64: string} | null>(null);
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
+  const [preferenceId, setPreferenceId] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("[CHECKOUT] Hidratação Concluída. PlanId:", planId);
@@ -94,130 +101,11 @@ export default function CheckoutPage() {
   const brickInstance = useRef<any>(null);
 
 
-  // 2. Inicialização do Mercado Pago com Isolamento de DOM
+  // O Mercado Pago agora é gerenciado pelo componente <Wallet />
+  // Apenas garantimos que o scroll volte ao topo ao mudar de passo
   useEffect(() => {
-    if (step !== 2 || !planDetails || success) return;
-
-    let isMounted = true;
-    const container = containerRef.current;
-
-    const initBrick = async (retryCount = 0) => {
-      console.log(`[CHECKOUT] Iniciando Brick (Tentativa ${retryCount + 1}). SDK Presente:`, !!window.MercadoPago);
-      if (!window.MercadoPago) {
-        if (retryCount < 15 && isMounted) {
-          setTimeout(() => initBrick(retryCount + 1), 500);
-        } else {
-          setErrorMsg("Gateway indisponível no momento. Por favor, recarregue a página ou verifique sua conexão.");
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      try {
-        if (!mpInstance.current) {
-          // Usar a chave do .env
-          const mpPublicKey = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
-          console.log('[CHECKOUT] Inicializando MP com chave:', mpPublicKey ? 'OK' : 'AUSENTE');
-          
-          if (!mpPublicKey) {
-            console.error('[CHECKOUT] Erro: NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY não configurada.');
-          }
-
-          mpInstance.current = new window.MercadoPago(mpPublicKey || '', {
-            locale: 'pt-BR'
-          });
-        }
-
-        const bricksBuilder = mpInstance.current.bricks();
-        
-        // Limpeza real do DOM para evitar conflitos de 'removeChild'
-        if (brickInstance.current) {
-          await brickInstance.current.unmount();
-        }
-        if (container) container.innerHTML = '';
-
-        const settings = {
-          initialization: {
-            amount: (planDetails.price + (domainType === "new" ? (domainPrice || 0) : 0)),
-            payer: { email: "" }, 
-          },
-          customization: {
-            visual: { style: { theme: 'default' } },
-            paymentMethods: {
-              bankTransfer: ['pix'],
-              maxInstallments: 1
-            },
-          },
-          callbacks: {
-            onReady: () => {
-              console.log("[CHECKOUT] Brick Pronto");
-              if (isMounted) setIsLoading(false);
-            },
-            onSubmit: ({ selectedPaymentMethod, formData }: { selectedPaymentMethod: string; formData: any }) => {
-              return new Promise<void>((resolve, reject) => {
-                if (!isMounted) return resolve();
-                console.log('[FRONTEND] selectedPaymentMethod:', selectedPaymentMethod);
-                console.log('[FRONTEND] formData:', JSON.stringify(formData));
-                setIsProcessing(true);
-                
-                const totalAmount = (planDetails.price + (domainType === "new" ? (domainPrice || 0) : 0));
-                processPaymentAction(planId as PlanId, { ...formData, domain, domainType, domainPrice, transaction_amount: totalAmount })
-                  .then(result => {
-                    if (result.success) {
-                      if (result.pix) {
-                         setPixData(result.pix as any);
-                      }
-                      setStep(3);
-                      setSuccess(true);
-                      resolve();
-                    } else {
-                      setErrorMsg(result.error || "Erro de comunicação.");
-                      setIsProcessing(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                      reject(new Error(result.error || "Erro de comunicação.")); // Rejecting re-enables the brick UI button!
-                    }
-                  })
-                  .catch((err: any) => {
-                    setErrorMsg(err?.message || "Erro de comunicação com o servidor.");
-                    setIsProcessing(false);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    reject(new Error(err?.message || "Erro de comunicação com o servidor."));
-                  });
-              });
-            },
-            onError: (err: any) => {
-              console.error("[CHECKOUT] Erro Brick:", err);
-              if (err?.type === 'non_critical') return;
-              if (isMounted) {
-                setErrorMsg("Erro ao carregar checkout. Tente atualizar a página.");
-                setIsLoading(false);
-              }
-            },
-          },
-        };
-
-        brickInstance.current = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
-      } catch (e: any) {
-        console.error("[CHECKOUT] Falha Crítica:", e);
-        if (isMounted) {
-          setIsLoading(false);
-          // Mostra o erro real para facilitar diagnóstico
-          const errMsg = e?.message || String(e) || 'Erro desconhecido';
-          setErrorMsg(`Falha ao carregar o gateway de pagamento. (${errMsg})`);
-        }
-      }
-    };
-
-    setIsLoading(true);
-    initBrick();
-
-    return () => {
-      isMounted = false;
-      if (brickInstance.current) {
-        try { brickInstance.current.unmount(); } catch(e) {}
-      }
-    };
-  }, [step, planDetails, planId, success]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
 
   if (!planDetails) return <div className="p-12 text-center text-red-500 font-bold">Plano Inválido.</div>;
 
@@ -465,22 +353,39 @@ export default function CheckoutPage() {
                     prev-id="btn-subscribe-step1"
                     disabled={!agreed}
                     className={`w-full sm:w-auto px-10 py-7 rounded-full shadow-2xl font-black uppercase italic tracking-widest transition-all text-white flex items-center justify-center ${agreed ? 'bg-[#DE2027] hover:scale-105 active:scale-95' : 'bg-gray-400 cursor-not-allowed'}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log("[CHECKOUT] Clique no botão assinar. Agreed:", agreed);
-                      if (!agreed) {
-                        setErrorMsg("Por favor, marque a caixa confirmando que leu e aceita os termos.");
-                        return;
-                      }
-                      setErrorMsg(null);
-                      console.log("[CHECKOUT] Transicionando para passo 2");
-                      setStep(2);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                  >
-                   Assinar Agora <ArrowRight className="ml-2 w-6 h-6" />
-                 </button>
+                     onClick={async (e) => {
+                       e.preventDefault();
+                       e.stopPropagation();
+                       if (!agreed) {
+                         setErrorMsg("Por favor, marque a caixa confirmando que leu e aceita os termos.");
+                         return;
+                       }
+                       
+                       setIsLoading(true);
+                       setErrorMsg(null);
+                       
+                       try {
+                         const result = await createPreferenceAction(planId as PlanId, {
+                           domain,
+                           domainType,
+                           domainPrice
+                         });
+
+                         if (result.success && result.preferenceId) {
+                           setPreferenceId(result.preferenceId);
+                           setStep(2);
+                         } else {
+                           setErrorMsg(result.error || "Erro ao gerar preferência de pagamento.");
+                         }
+                       } catch (err: any) {
+                         setErrorMsg("Erro de conexão com o servidor.");
+                       } finally {
+                         setIsLoading(false);
+                       }
+                     }}
+                   >
+                    Assinar Agora <ArrowRight className="ml-2 w-6 h-6" />
+                  </button>
               </div>
             </div>
           )}
@@ -508,22 +413,19 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Loader isolado do container real para evitar o crash removeChild */}
-              {(isLoading || isProcessing) && (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="w-10 h-10 animate-spin text-[#DE2027] mb-4" />
-                  <p className="font-bold text-gray-500 italic">
-                    {isProcessing ? "Verificando dados..." : "Criptografando conexão..."}
-                  </p>
-                </div>
-              )}
-
-              {/* Container EXCLUSIVO que o React NÃO gerencia internamente */}
-              <div 
-                id="paymentBrick_container" 
-                ref={containerRef}
-                className={isLoading ? "hidden" : "block animate-in fade-in duration-500"}
-              ></div>
+              {/* Componente Wallet do Checkout Pro */}
+              <div className="animate-in fade-in duration-500 min-h-[150px]">
+                {preferenceId ? (
+                  <Wallet 
+                    initialization={{ preferenceId }} 
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="w-10 h-10 animate-spin text-[#DE2027] mb-4" />
+                    <p className="font-bold text-gray-500 italic">Preparando pagamento...</p>
+                  </div>
+                )}
+              </div>
 
               {!isLoading && !isProcessing && (
                 <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between">

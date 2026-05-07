@@ -1,6 +1,6 @@
 "use server";
 
-import { MercadoPagoConfig, Payment } from 'mercadopago';
+import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { PLANS, PlanId } from '../constants';
@@ -386,5 +386,131 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
     }
 
     return { success: false, error: errorMsg };
+  }
+}
+
+export async function createPreferenceAction(planId: PlanId, formData: any) {
+  const { headers } = await import('next/headers');
+  
+  const plan = PLANS[planId];
+  if (!plan) return { success: false, error: "Plano inválido." };
+
+  try {
+    const client = getMPClient();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "Você precisa estar logado." };
+
+    const headerList = await headers();
+    const ip = headerList.get("x-forwarded-for") || "127.0.0.1";
+    const userAgent = headerList.get("user-agent") || "unknown";
+
+    // 1. Buscar Perfil
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('cpf, cnpj, account_type, full_name')
+      .eq('id', user.id)
+      .single();
+
+    const totalAmount = plan.price + (formData.domainType === 'new' ? (Number(formData.domainPrice) || 0) : 0);
+    const nameObj = splitName(formData.fullName || profile?.full_name || user.user_metadata?.full_name || 'Cliente');
+
+    // 2. Registrar Assinatura Pendente
+    const nextBillingDate = new Date();
+    nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+
+    const { data: subData, error: subError } = await supabaseAdmin.from("subscriptions").insert({
+      user_id: user.id,
+      plan_id: planId,
+      status: 'pending',
+      domain: formData.domain,
+      domain_type: formData.domainType,
+      start_date: new Date().toISOString(),
+      next_billing_date: nextBillingDate.toISOString()
+    }).select().single();
+
+    if (subError) throw new Error("Erro ao criar assinatura: " + subError.message);
+
+    // 3. Registrar Contrato
+    const { data: contractData, error: contractError } = await supabaseAdmin
+      .from("contracts")
+      .insert({
+        user_id: user.id,
+        subscription_id: subData.id,
+        plan_id: planId,
+        ip_address: ip,
+        user_agent: userAgent,
+        agreed_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (contractError) throw new Error("Erro ao registrar contrato: " + contractError.message);
+
+    // 4. Registrar a Fatura Pendente
+    const { data: invoiceData, error: invoiceError } = await supabaseAdmin.from("invoices").insert({
+      user_id: user.id,
+      subscription_id: subData?.id,
+      amount: totalAmount,
+      status: 'pending',
+      due_date: new Date().toISOString(),
+    }).select().single();
+
+    if (invoiceError) throw new Error("Erro ao gerar fatura: " + invoiceError.message);
+
+    // 5. Criar Preferência no Mercado Pago
+    const preference = new Preference(client);
+    
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br';
+    
+    const preferenceBody = {
+      items: [
+        {
+          id: planId,
+          title: `Hospedagem ${plan.title}`,
+          description: plan.description,
+          quantity: 1,
+          unit_price: totalAmount,
+          category_id: 'services',
+          currency_id: 'BRL'
+        }
+      ],
+      payer: {
+        email: user.email,
+        name: nameObj.first_name,
+        surname: nameObj.last_name,
+      },
+      external_reference: contractData.id, // Para o webhook encontrar o contrato e ativar a assinatura
+      back_urls: {
+        success: `${siteUrl}/cliente/dashboard?success=true`,
+        failure: `${siteUrl}/checkout/${planId}?success=false`,
+        pending: `${siteUrl}/cliente/dashboard?success=pending`
+      },
+      auto_return: 'approved' as const,
+      notification_url: `${siteUrl}/api/webhooks/mercadopago`,
+      payment_methods: {
+        excluded_payment_types: [
+          { id: 'ticket' } // Opcional: excluir boleto se preferir apenas cartões/pix
+        ],
+        installments: 12
+      }
+    };
+
+    const preferenceResponse = await preference.create({ body: preferenceBody });
+
+    // 6. Atualizar Fatura com o ID da Preferência
+    await supabaseAdmin
+      .from("invoices")
+      .update({ mp_preference_id: preferenceResponse.id })
+      .eq("id", invoiceData.id);
+
+    return { 
+      success: true, 
+      preferenceId: preferenceResponse.id 
+    };
+
+  } catch (error: any) {
+    console.error("=== ERRO AO CRIAR PREFERÊNCIA ===", error);
+    return { success: false, error: error.message || "Erro ao iniciar checkout." };
   }
 }
