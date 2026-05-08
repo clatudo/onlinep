@@ -23,11 +23,14 @@ export async function POST(req: NextRequest) {
       const payment = await paymentApi.get({ id: resourceId });
       
       if (payment && payment.external_reference) {
-        const extRef = payment.external_reference;
+        const fullRef = payment.external_reference;
+        // Pega apenas a primeira parte caso haja um timestamp (ex: invoiceId_timestamp)
+        const extRef = fullRef.split('_')[0]; 
+        
         const mpStatus = payment.status === "approved" ? "active" : "pending";
         const invoiceStatus = payment.status === "approved" ? "paid" : "pending";
         
-        // 1. Tentar encontrar se é um Checkout Inicial (external_reference == contract.id)
+        // 1. Tentar encontrar se é um Checkout Inicial (extRef == contract.id)
         const { data: contract } = await supabaseAdmin
           .from("contracts")
           .select("subscription_id")
@@ -42,14 +45,12 @@ export async function POST(req: NextRequest) {
             .eq("id", contract.subscription_id);
 
           // Atualiza a fatura inicial
-          // Primeiro tenta pelo mp_preference_id (Checkout Pro)
-          // Se não encontrar, tenta pelo resourceId (Pix/Antigo)
           const prefId = (payment as any).preference_id;
           
           if (prefId) {
             await supabaseAdmin
               .from("invoices")
-              .update({ status: invoiceStatus, mp_payment_url: resourceId.toString() }) // Guardamos o ID do pagamento aqui se quiser
+              .update({ status: invoiceStatus, mp_payment_url: resourceId.toString() })
               .eq("mp_preference_id", prefId);
           } else {
             await supabaseAdmin
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
               .eq("mp_preference_id", resourceId.toString());
           }
         } else {
-          // 2. Se não encontrou contrato, pode ser um pagamento direto de Fatura (external_reference == invoice.id)
+          // 2. Se não encontrou contrato, pode ser um pagamento direto de Fatura (extRef == invoice.id)
           const { data: invoice } = await supabaseAdmin
             .from("invoices")
             .select("id, subscription_id")

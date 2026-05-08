@@ -135,8 +135,13 @@ export async function processPaymentAction(planId: PlanId, formData: any) {
 
     console.log('[MP] paymentBody payer:', JSON.stringify(paymentBody.payer));
 
-    // Apenas Pix/Boleto (Sem Cartão por enquanto)
+    // Suporte a Pix, Boleto e Cartão
     paymentBody.payment_method_id = formData.payment_method_id;
+    if (formData.token) {
+      paymentBody.token = formData.token;
+      paymentBody.installments = Number(formData.installments);
+      paymentBody.issuer_id = formData.issuer_id ? String(formData.issuer_id) : undefined;
+    }
 
     console.log('[MP] FINAL paymentBody:', JSON.stringify(paymentBody, null, 2));
 
@@ -322,8 +327,13 @@ export async function processInvoicePaymentAction(invoiceId: string, formData: a
       }
     };
 
-    // Apenas Pix/Boleto (Sem Cartão por enquanto)
+    // Suporte a Pix, Boleto e Cartão
     paymentBody.payment_method_id = formData.payment_method_id;
+    if (formData.token) {
+      paymentBody.token = formData.token;
+      paymentBody.installments = Number(formData.installments);
+      paymentBody.issuer_id = formData.issuer_id ? String(formData.issuer_id) : undefined;
+    }
 
     console.log('[MP INVOICE] FINAL paymentBody:', JSON.stringify(paymentBody, null, 2));
 
@@ -512,5 +522,83 @@ export async function createPreferenceAction(planId: PlanId, formData: any) {
   } catch (error: any) {
     console.error("=== ERRO AO CRIAR PREFERÊNCIA ===", error);
     return { success: false, error: error.message || "Erro ao iniciar checkout." };
+  }
+}
+
+export async function getInvoicePreferenceAction(invoiceId: string) {
+  try {
+    const client = getMPClient();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "Sessão expirada." };
+
+    // 1. Buscar Fatura e Plano Associado
+    const { data: invoice } = await supabaseAdmin
+      .from("invoices")
+      .select("amount, subscriptions(plan_id)")
+      .eq("id", invoiceId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (!invoice) return { success: false, error: "Fatura não encontrada." };
+
+    // 2. Preparar Preferência Mínima
+    const preference = new Preference(client);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://onlineproducoes.com.br';
+    
+    const subData = Array.isArray(invoice.subscriptions) ? invoice.subscriptions[0] : invoice.subscriptions;
+    const planId = subData?.plan_id || 'custom';
+    const totalAmount = Number(Number(invoice.amount).toFixed(2));
+    
+    // Gerar uma referência única para esta TENTATIVA de pagamento (evita erro de duplicidade no MP)
+    const attemptId = `${invoiceId}_${Date.now()}`;
+
+    const preferenceBody = {
+      items: [
+        {
+          id: planId,
+          title: `Fatura #${invoiceId.split('-')[0].toUpperCase()}`,
+          description: 'Hospedagem de Sites e Serviços',
+          quantity: 1,
+          unit_price: totalAmount,
+          category_id: 'services',
+          currency_id: 'BRL'
+        }
+      ],
+      payer: {
+        email: user.email,
+        name: user.user_metadata?.full_name?.split(' ')[0] || "Cliente",
+        surname: user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || "Online",
+      },
+      external_reference: attemptId, // Referência ÚNICA por tentativa
+      back_urls: {
+        success: `${siteUrl}/cliente/dashboard?success=true`,
+        failure: `${siteUrl}/cliente/faturas?success=false`,
+        pending: `${siteUrl}/cliente/dashboard?success=pending`
+      },
+      auto_return: 'approved' as const,
+      payment_methods: {
+        installments: 12
+      },
+      notification_url: `${siteUrl}/api/webhooks/mercadopago`,
+    };
+
+    const response = await preference.create({ body: preferenceBody });
+
+    // Atualizar a fatura com a nova preferência
+    await supabaseAdmin
+      .from("invoices")
+      .update({ mp_preference_id: response.id })
+      .eq("id", invoiceId);
+
+    return { 
+      success: true, 
+      preferenceId: response.id,
+      init_point: response.init_point
+    };
+
+  } catch (error: any) {
+    console.error("=== ERRO AO GERAR PREFERÊNCIA DE FATURA ===", error);
+    return { success: false, error: error.message || "Erro ao iniciar pagamento." };
   }
 }
