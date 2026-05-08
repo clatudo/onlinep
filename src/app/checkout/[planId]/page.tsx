@@ -46,11 +46,12 @@ function CheckoutContent() {
   const planId = (params.planId as string) || "starter";
   const planDetails = PLANS[planId as PlanId];
 
+  const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   
   // Estados de Domínio - Inicializados via URL se houver retorno do MP
-  const [domain, setDomain] = useState(searchParams.get("domain") || "");
-  const [domainType, setDomainType] = useState<"new" | "existing">((searchParams.get("domainType") as "new" | "existing") || "existing");
+  const [domain, setDomain] = useState("");
+  const [domainType, setDomainType] = useState<"new" | "existing">("existing");
   const [domainPrice, setDomainPrice] = useState<number | null>(null);
   const [checkingDomain, setCheckingDomain] = useState(false);
   const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
@@ -62,7 +63,18 @@ function CheckoutContent() {
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
 
-  // Detectar retorno de erro do Mercado Pago e Logs de Depuração
+  const contractRef = useRef<HTMLDivElement>(null);
+
+  // 1. Efeito de Montagem
+  useEffect(() => {
+    setMounted(true);
+    const urlDomain = searchParams.get("domain");
+    const urlType = searchParams.get("domainType");
+    if (urlDomain) setDomain(urlDomain);
+    if (urlType === "new" || urlType === "existing") setDomainType(urlType);
+  }, [searchParams]);
+
+  // 2. Efeito de Detecção de Erro MP
   useEffect(() => {
     const success = searchParams.get("success");
     const status = searchParams.get("status");
@@ -75,14 +87,12 @@ function CheckoutContent() {
     }
   }, [searchParams]);
 
-  const contractRef = useRef<HTMLDivElement>(null);
-
+  // 3. Efeito de Scroll Top no Step
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [step]);
 
-  if (!planDetails) return <div className="p-12 text-center text-red-500 font-bold">Plano Inválido.</div>;
-
+  // 4. Efeito de Verificação de Domínio Automática
   useEffect(() => {
     if (domainType !== 'new' || !domain || domain.length < 4) {
       setDomainAvailable(null);
@@ -129,9 +139,20 @@ function CheckoutContent() {
     }
   };
 
+  // RENDERIZAÇÃO CONDICIONAL APÓS TODOS OS HOOKS
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFBFA]">
+        <Loader2 className="w-12 h-12 animate-spin text-[#DE2027]" />
+      </div>
+    );
+  }
+
+  if (!planDetails) return <div className="p-12 text-center text-red-500 font-bold">Plano Inválido.</div>;
+
   return (
     <div className="min-h-screen bg-[#FAFBFA] flex flex-col justify-center items-center py-12 px-4 font-sans text-[#131A26]">
-      <div className="w-full max-w-2xl bg-white border border-gray-200 rounded-[2rem] shadow-xl overflow-hidden mb-4 animate-in fade-in duration-700">
+      <div className="w-full max-w-2xl bg-white border border-gray-200 rounded-[2rem] shadow-xl overflow-hidden mb-4">
         
         <div className="bg-[#131A26] p-8 text-center border-b-4 border-[#DE2027]">
           <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">
@@ -143,7 +164,7 @@ function CheckoutContent() {
         <div className="p-8 md:p-10">
           
           {errorMsg && (
-            <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl animate-in slide-in-from-top duration-500 shadow-sm">
+            <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm">
               <div className="flex items-center gap-3">
                 <AlertCircle className="text-red-600 w-6 h-6 shrink-0" />
                 <p className="text-red-700 font-bold text-sm italic leading-tight">
@@ -357,7 +378,14 @@ function CheckoutContent() {
                  </div>
               </div>
 
-              <div className="animate-in fade-in duration-500 min-h-[150px]">
+              <div className="text-center mb-8">
+                <p className="text-sm font-black uppercase tracking-widest text-[#131A26] italic">
+                  Realize o pagamento através do botão abaixo:
+                </p>
+                <div className="w-12 h-1 bg-[#DE2027] mx-auto mt-2 rounded-full"></div>
+              </div>
+
+              <div className="min-h-[150px]">
                 {preferenceId ? (
                   <Wallet initialization={{ preferenceId }} />
                 ) : (
